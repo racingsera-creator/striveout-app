@@ -1,0 +1,9 @@
+{
+  "name": "striveout-edge",
+  "version": "1.0.3",
+  "description": "StriveOut — Your outdoor Edge",
+  "private": true,
+  "scripts": {
+    "build": "echo 'StriveOut v1.0.3 ready'"
+  }
+}

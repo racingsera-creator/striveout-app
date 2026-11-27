@@ -1,0 +1,8 @@
+{
+  "appId": "com.striveout.edge",
+  "appName": "StriveOut",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

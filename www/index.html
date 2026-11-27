@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>StriveOut — Your outdoor Edge</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --emerald: #059669;
+      --emerald-bright: #10b981;
+      --emerald-soft: #ecfdf5;
+      --border: #e2e8f0;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--ink); min-height: 100vh; overflow-x: hidden; }
+    header.app-header {
+      background: linear-gradient(135deg, #0f172a 0%, #064e3b 65%, #059669 100%);
+      color: #fff;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 500;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.16);
+    }
+    .brand-box { display: flex; align-items: center; gap: 11px; }
+    .brand-title { font-size: 1.22rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+    .brand-slogan { font-size: 0.74rem; color: #6ee7b7; font-weight: 600; letter-spacing: 0.02em; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .icon-btn {
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.22);
+      color: #fff;
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      position: relative;
+    }
+    .badge-dot {
+      position: absolute;
+      top: -4px;
+      right: -3px;
+      background: var(--danger);
+      color: #fff;
+      font-size: 0.68rem;
+      font-weight: 800;
+      min-width: 17px;
+      height: 17px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+    }
+    nav.tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 62px;
+      z-index: 450;
+    }
+    nav.tabs button {
+      border: none;
+      background: transparent;
+      padding: 11px 6px;
+      font-weight: 700;
+      font-size: 0.82rem;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+    }
+    nav.tabs button.active { color: var(--emerald); border-bottom-color: var(--emerald); background: var(--emerald-soft); }
+    main.container { max-width: 980px; margin: 0 auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px; box-shadow: 0 2px 8px rgba(15,23,42,0.04); }
+    .card-title { font-weight: 800; font-size: 1rem; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .map-shell { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--border); background: #cbd5e1; }
+    #map { width: 100%; height: 390px; z-index: 1; }
+    body.fullscreen-active header.app-header,
+    body.fullscreen-active nav.tabs,
+    body.fullscreen-active .non-map-panel { display: none !important; }
+    body.fullscreen-active main.container { max-width: 100%; padding: 0; margin: 0; }
+    body.fullscreen-active .map-shell { position: fixed; inset: 0; width: 100vw; height: 100vh; border-radius: 0; border: none; z-index: 9999; }
+    body.fullscreen-active #map { width: 100vw; height: 100vh; }
+
+    /* Komoot-style top turn bar & bottom telemetry bar during active mode */
+    .komoot-top-bar {
+      display: none;
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      z-index: 10002;
+      background: #0f172a;
+      color: #fff;
+      border-radius: 14px;
+      padding: 12px 14px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      box-shadow: 0 8px 24px rgba(15,23,42,0.32);
+    }
+    body.fullscreen-active .komoot-top-bar { display: flex; }
+    .komoot-bottom-bar {
+      display: none;
+      position: absolute;
+      bottom: 14px;
+      left: 12px;
+      right: 12px;
+      z-index: 10002;
+      background: rgba(15, 23, 42, 0.95);
+      color: #fff;
+      border-radius: 16px;
+      padding: 12px 16px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      box-shadow: 0 8px 24px rgba(15,23,42,0.35);
+    }
+    body.fullscreen-active .komoot-bottom-bar { display: flex; }
+
+    .controls-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 9px 13px;
+      font-weight: 700;
+      font-size: 0.84rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary { background: var(--emerald); color: #fff; }
+    .btn-dark { background: var(--ink); color: #fff; }
+    .btn-soft { background: #e2e8f0; color: var(--ink); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .slope-legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.76rem; color: var(--muted); margin-top: 8px; }
+    .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+    .photo-mini-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: 3px solid #fff;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+      object-fit: cover;
+    }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 0.88rem;
+      background: #fff;
+      color: var(--ink);
+    }
+    .list-item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+      background: #f8fafc;
+    }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--ink);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-size: 0.84rem;
+      font-weight: 700;
+      z-index: 20000;
+      display: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 15000;
+      padding: 14px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-box { background: #fff; border-radius: 16px; max-width: 520px; width: 100%; max-height: 88vh; overflow-y: auto; padding: 16px; }
+    .hidden-tab { display: none !important; }
+    .avatar-img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid var(--emerald); background: #e2e8f0; }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand-box">
+      <!-- StriveOut Custom Geometric Outdoor Edge Logo -->
+      <svg width="42" height="42" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="StriveOut Logo">
+        <rect width="64" height="64" rx="16" fill="#065f46"/>
+        <path d="M10 46L25 18L39 46" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M28 46L41 25L53 46" stroke="#a7f3d0" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M36 13L50 19.5L36 26" stroke="#34d399" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <div class="brand-title">StriveOut</div>
+        <div class="brand-slogan">Your outdoor Edge</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="openTab('garmin')">⌚ Garmin</button>
+      <button class="icon-btn" onclick="toggleNotifModal()" aria-label="Notifiche">
+        🔔 <span id="notifBadge" class="badge-dot">2</span>
+      </button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button id="tabBtn-esplora" class="active" onclick="openTab('esplora')">🗺️ Esplora</button>
+    <button id="tabBtn-pianifica" onclick="openTab('pianifica')">📐 Pianifica</button>
+    <button id="tabBtn-profilo" onclick="openTab('profilo')">👤 Profilo</button>
+    <button id="tabBtn-garmin" onclick="openTab('garmin')">⌚ Garmin</button>
+  </nav>
+
+  <main class="container">
+    <div class="map-shell" id="mapShell">
+      <div class="komoot-top-bar" id="komootTopBar">
+        <div>
+          <div style="font-size:0.72rem;color:#6ee7b7;font-weight:800;text-transform:uppercase;" id="hudModeLabel">Navigazione StriveOut</div>
+          <div style="font-size:1.05rem;font-weight:800;" id="hudTurnText">↗ Prosegui sul sentiero verso Passo Giau · 420 m</div>
+        </div>
+        <button class="btn btn-danger" onclick="finishSession()">■ Termina</button>
+      </div>
+      <div id="map"></div>
+      <div class="komoot-bottom-bar" id="komootBottomBar">
+        <div><div style="font-size:0.7rem;color:#94a3b8;">Distanza</div><strong id="hudDist">0.0 km</strong></div>
+        <div><div style="font-size:0.7rem;color:#94a3b8;">Dislivello</div><strong id="hudElev">+0 m</strong></div>
+        <div><div style="font-size:0.7rem;color:#94a3b8;">Tempo</div><strong id="hudTime">00:00</strong></div>
+      </div>
+    </div>
+
+    <!-- ESPLORA TAB -->
+    <section id="tab-esplora" class="card non-map-panel">
+      <div class="card-title">
+        <span>Controlli Traccia &amp; Pendenza</span>
+        <span style="font-size:0.76rem;color:var(--emerald);font-weight:700;">Your outdoor Edge</span>
+      </div>
+      <div class="controls-bar">
+        <button class="btn btn-primary" onclick="startSession('navigazione')">🧭 AVVIA</button>
+        <button class="btn btn-dark" onclick="startSession('registrazione')">● REGISTRA</button>
+        <button class="btn btn-soft" id="btnSlopeToggle" onclick="toggleSlopeMode()">Pendenza: OFF</button>
+        <button class="btn btn-soft" onclick="addSampleGeotaggedPhoto()">📷 Foto Geo su Mappa</button>
+      </div>
+      <div class="slope-legend">
+        <span><i class="swatch" style="background:#10b981;"></i>&lt;4%</span>
+        <span><i class="swatch" style="background:#eab308;"></i>4–8%</span>
+        <span><i class="swatch" style="background:#f97316;"></i>8–12%</span>
+        <span><i class="swatch" style="background:#ef4444;"></i>&gt;12%</span>
+      </div>
+    </section>
+
+    <!-- PIANIFICA TAB -->
+    <section id="tab-pianifica" class="card non-map-panel hidden-tab">
+      <div class="card-title">Pianifica Nuovo Percorso</div>
+      <div class="grid-2">
+        <input id="planName" class="input" placeholder="Nome percorso (es. Anello Dolomiti)" />
+        <select id="planActivity" class="input">
+          <option value="MTB / Gravel">MTB / Gravel</option>
+          <option value="Bici da Corsa">Bici da Corsa</option>
+          <option value="Trekking / Trail">Trekking / Trail</option>
+        </select>
+      </div>
+      <div class="controls-bar">
+        <button class="btn btn-primary" onclick="savePlannedRoute()">+ Salva in Pianificati</button>
+      </div>
+    </section>
+
+    <!-- PROFILO TAB -->
+    <section id="tab-profilo" class="non-map-panel hidden-tab">
+      <div class="card">
+        <div class="card-title">Profilo Personale</div>
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+          <img id="avatarPreview" class="avatar-img" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' fill='%23059669'/><text x='32' y='40' font-size='24' fill='white' text-anchor='middle' font-family='sans-serif'>SO</text></svg>" alt="Avatar" />
+          <div style="flex:1;">
+            <label class="btn btn-soft" style="cursor:pointer;">
+              Carica Foto Profilo
+              <input type="file" accept="image/*" style="display:none;" onchange="handleAvatarUpload(event)" />
+            </label>
+            <div style="margin-top:8px;font-size:0.84rem;display:flex;gap:14px;">
+              <span style="cursor:pointer;font-weight:700;" onclick="showToast('148 Followers attivi')"><strong>148</strong> Followers</span>
+              <span style="cursor:pointer;font-weight:700;" onclick="showToast('92 profili seguiti')"><strong>92</strong> Chi mi segue</span>
+            </div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <input id="profileUsername" class="input" value="Marco Bellini" placeholder="Nome utente" />
+          <input id="profileBio" class="input" value="Esploratore alpino · Your outdoor Edge" placeholder="Descrizione" />
+        </div>
+        <div class="controls-bar">
+          <button class="btn btn-primary" onclick="showToast('Profilo StriveOut aggiornato')">Salva Profilo</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Riepilogo</div>
+        <div class="grid-2">
+          <div>
+            <strong>Percorsi pianificati (<span id="plannedCount">1</span>)</strong>
+            <div id="plannedList"></div>
+          </div>
+          <div>
+            <strong>Percorsi completati (<span id="completedCount">1</span>)</strong>
+            <div id="completedList"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Le mie attrezzature</div>
+        <div class="grid-2">
+          <input id="eqBrand" class="input" placeholder="Marca (es. Canyon, Garmin, Hoka)" />
+          <input id="eqModel" class="input" placeholder="Modello (es. Grail CF SL, Speedgoat 5)" />
+        </div>
+        <div class="controls-bar">
+          <select id="eqActivity" class="input" style="max-width:220px;">
+            <option value="MTB / Gravel">MTB / Gravel</option>
+            <option value="Bici da Corsa">Bici da Corsa</option>
+            <option value="Trekking / Trail">Trekking / Trail</option>
+          </select>
+          <button class="btn btn-primary" onclick="addEquipment()">+ Aggiungi Attrezzatura</button>
+        </div>
+        <div id="equipmentList"></div>
+      </div>
+    </section>
+
+    <!-- GARMIN TAB -->
+    <section id="tab-garmin" class="card non-map-panel hidden-tab">
+      <div class="card-title">Sincronizzazione Garmin Connect™</div>
+      <p style="font-size:0.86rem;color:var(--muted);margin-bottom:10px;">
+        Importazione automatica dei percorsi e delle attività da Garmin Connect™ verso StriveOut.
+      </p>
+      <div class="controls-bar">
+        <button class="btn btn-primary" onclick="syncGarminNow()">🔄 Importa Percorsi Garmin</button>
+        <label style="font-size:0.84rem;font-weight:700;display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="autoGarmin" checked onchange="showToast(this.checked ? 'Importazione automatica Garmin attiva' : 'Importazione automatica in pausa')" />
+          Importazione automatica attiva
+        </label>
+      </div>
+    </section>
+  </main>
+
+  <!-- Save Activity Modal -->
+  <div class="modal-backdrop" id="saveActivityModal">
+    <div class="modal-box">
+      <div class="card-title">Salva Percorso Completato</div>
+      <input id="actTitle" class="input" value="Uscita StriveOut" style="margin-bottom:8px;" />
+      <label style="font-size:0.82rem;font-weight:700;display:block;margin-bottom:4px;">Attrezzatura utilizzata</label>
+      <select id="actEquipment" class="input" style="margin-bottom:10px;"></select>
+      <label style="font-size:0.82rem;font-weight:700;display:block;margin-bottom:4px;">Foto geolocalizzate (mini-icone sulla mappa)</label>
+      <input type="file" accept="image/*" multiple class="input" onchange="attachActivityPhotos(event)" />
+      <div class="controls-bar">
+        <button class="btn btn-primary" onclick="confirmSaveActivity()">Salva Percorso</button>
+        <button class="btn btn-soft" onclick="closeSaveModal()">Chiudi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notifications Modal -->
+  <div class="modal-backdrop" id="notifModal">
+    <div class="modal-box">
+      <div class="card-title">
+        <span>Notifiche StriveOut</span>
+        <button class="btn btn-soft" onclick="toggleNotifModal()">Chiudi</button>
+      </div>
+      <div id="notifList"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const routeCoords = [
+      [46.4825, 12.0542],
+      [46.4860, 12.0510],
+      [46.4895, 12.0475],
+      [46.4922, 12.0430],
+      [46.4950, 12.0390]
+    ];
+    const slopeColors = ['#10b981', '#eab308', '#f97316', '#ef4444'];
+    let map, baseLayer, slopeLayers = [], slopeMode = false;
+    let sessionType = null, sessionTimer = null, sessionSeconds = 0, sessionDist = 0, sessionElev = 0;
+    let pendingPhotos = [];
+    let plannedRoutes = [{ name: 'Cresta del Lagazuoi · 18.4 km', activity: 'Trekking / Trail' }];
+    let completedRoutes = [{ name: 'Passo Giau Loop · 24.6 km', activity: 'MTB / Gravel' }];
+    let equipment = [
+      { brand: 'Canyon', model: 'Grail CF SL', activity: 'MTB / Gravel', monthlyKm: 310, annualKm: 2840 },
+      { brand: 'Hoka', model: 'Speedgoat 5', activity: 'Trekking / Trail', monthlyKm: 118, annualKm: 960 }
+    ];
+    let notifications = [
+      'Nuovo like sul percorso completato "Passo Giau Loop"',
+      'Nuovo commento su "Passo Giau Loop": "Traccia spettacolare!"'
+    ];
+
+    function initMap() {
+      map = L.map('map').setView(routeCoords[2], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+      baseLayer = L.polyline(routeCoords, { color: '#059669', weight: 6 }).addTo(map);
+      for (let i = 0; i < routeCoords.length - 1; i++) {
+        const seg = L.polyline([routeCoords[i], routeCoords[i+1]], {
+          color: slopeColors[i % slopeColors.length],
+          weight: 7
+        });
+        slopeLayers.push(seg);
+      }
+      renderLists();
+      renderNotifications();
+    }
+
+    function toggleSlopeMode() {
+      slopeMode = !slopeMode;
+      document.getElementById('btnSlopeToggle').textContent = 'Pendenza: ' + (slopeMode ? 'ON' : 'OFF');
+      if (slopeMode) {
+        map.removeLayer(baseLayer);
+        slopeLayers.forEach(l => l.addTo(map));
+      } else {
+        slopeLayers.forEach(l => map.removeLayer(l));
+        baseLayer.addTo(map);
+      }
+    }
+
+    function startSession(type) {
+      sessionType = type;
+      sessionSeconds = 0; sessionDist = 0; sessionElev = 0;
+      document.getElementById('hudModeLabel').textContent = type === 'navigazione' ? 'Navigazione Attiva · StriveOut' : 'Registrazione GPS · StriveOut';
+      document.body.classList.add('fullscreen-active');
+      setTimeout(() => map.invalidateSize(), 120);
+      sessionTimer = setInterval(() => {
+        sessionSeconds++;
+        sessionDist += 0.04;
+        sessionElev += 3;
+        const m = String(Math.floor(sessionSeconds / 60)).padStart(2, '0');
+        const s = String(sessionSeconds % 60).padStart(2, '0');
+        document.getElementById('hudDist').textContent = sessionDist.toFixed(1) + ' km';
+        document.getElementById('hudElev').textContent = '+' + sessionElev + ' m';
+        document.getElementById('hudTime').textContent = m + ':' + s;
+      }, 1000);
+    }
+
+    function finishSession() {
+      clearInterval(sessionTimer);
+      const finishedType = sessionType;
+      sessionType = null;
+      document.body.classList.remove('fullscreen-active');
+      setTimeout(() => map.invalidateSize(), 120);
+      pushNotification(finishedType === 'navigazione' ? 'Termine navigazione percorso' : 'Termine registrazione percorso');
+      populateEquipmentSelect();
+      pendingPhotos = [];
+      document.getElementById('saveActivityModal').classList.add('open');
+    }
+
+    function closeSaveModal() {
+      document.getElementById('saveActivityModal').classList.remove('open');
+    }
+
+    function populateEquipmentSelect() {
+      const sel = document.getElementById('actEquipment');
+      sel.innerHTML = equipment.map((e, idx) => `<option value="${idx}">${e.brand} ${e.model} (${e.activity})</option>`).join('');
+    }
+
+    function attachActivityPhotos(ev) {
+      const files = Array.from(ev.target.files || []);
+      files.forEach((f, idx) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const coord = routeCoords[idx % routeCoords.length];
+          pendingPhotos.push({ src: e.target.result, lat: coord[0], lng: coord[1] });
+        };
+        reader.readAsDataURL(f);
+      });
+    }
+
+    function addPhotoMarker(src, lat, lng) {
+      const icon = L.divIcon({
+        className: '',
+        html: `<img src="${src}" class="photo-mini-icon" />`,
+        iconSize: [38, 38],
+        iconAnchor: [19, 19]
+      });
+      L.marker([lat, lng], { icon }).addTo(map).bindPopup('<img src="' + src + '" style="width:160px;border-radius:8px;" />');
+    }
+
+    function addSampleGeotaggedPhoto() {
+      const svg = "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='120' height='120' fill='%23059669'/><text x='60' y='66' font-size='22' fill='white' text-anchor='middle' font-family='sans-serif'>EDGE</text></svg>");
+      const c = routeCoords[Math.floor(Math.random() * routeCoords.length)];
+      addPhotoMarker(svg, c[0], c[1]);
+      showToast('Mini-icona foto geolocalizzata aggiunta sulla mappa');
+    }
+
+    function confirmSaveActivity() {
+      const title = document.getElementById('actTitle').value.trim() || 'Percorso Completato';
+      const eqIdx = parseInt(document.getElementById('actEquipment').value, 10);
+      const kmAdded = Math.max(1.2, Number(sessionDist.toFixed(1)) || 8.5);
+      let actName = 'MTB / Gravel';
+      if (!isNaN(eqIdx) && equipment[eqIdx]) {
+        equipment[eqIdx].monthlyKm = Number((equipment[eqIdx].monthlyKm + kmAdded).toFixed(1));
+        equipment[eqIdx].annualKm = Number((equipment[eqIdx].annualKm + kmAdded).toFixed(1));
+        actName = equipment[eqIdx].activity;
+      }
+      pendingPhotos.forEach(p => addPhotoMarker(p.src, p.lat, p.lng));
+      completedRoutes.unshift({ name: `${title} · ${kmAdded} km`, activity: actName });
+      renderLists();
+      closeSaveModal();
+      showToast('Percorso salvato e km attrezzatura aggiornati');
+    }
+
+    function savePlannedRoute() {
+      const name = document.getElementById('planName').value.trim() || 'Nuovo Itinerario StriveOut';
+      const act = document.getElementById('planActivity').value;
+      plannedRoutes.unshift({ name, activity: act });
+      document.getElementById('planName').value = '';
+      renderLists();
+      showToast('Percorso aggiunto a Percorsi pianificati');
+    }
+
+    function addEquipment() {
+      const brand = document.getElementById('eqBrand').value.trim();
+      const model = document.getElementById('eqModel').value.trim();
+      const activity = document.getElementById('eqActivity').value;
+      if (!brand || !model) { showToast('Inserisci marca e modello'); return; }
+      equipment.push({ brand, model, activity, monthlyKm: 0, annualKm: 0 });
+      document.getElementById('eqBrand').value = '';
+      document.getElementById('eqModel').value = '';
+      renderLists();
+      showToast('Attrezzatura aggiunta a Le mie attrezzature');
+    }
+
+    function syncGarminNow() {
+      const imported = { name: 'Garmin Connect · Val di Funes', activity: 'MTB / Gravel' };
+      completedRoutes.unshift(imported);
+      renderLists();
+      pushNotification('Importato automaticamente percorso da Garmin Connect: Val di Funes');
+      showToast('Percorso importato da Garmin Connect');
+    }
+
+    function renderLists() {
+      document.getElementById('plannedCount').textContent = plannedRoutes.length;
+      document.getElementById('completedCount').textContent = completedRoutes.length;
+      document.getElementById('plannedList').innerHTML = plannedRoutes.map(r => `<div class="list-item"><span>${r.name}</span><small>${r.activity}</small></div>`).join('');
+      document.getElementById('completedList').innerHTML = completedRoutes.map(r => `<div class="list-item"><span>${r.name}</span><small>${r.activity}</small></div>`).join('');
+      document.getElementById('equipmentList').innerHTML = equipment.map(e => `
+        <div class="list-item">
+          <div><strong>${e.brand} ${e.model}</strong><div style="font-size:0.78rem;color:var(--muted);">Attività: ${e.activity}</div></div>
+          <div style="text-align:right;font-size:0.82rem;">
+            <div>Mese: <strong>${e.monthlyKm} km</strong></div>
+            <div>Anno: <strong>${e.annualKm} km</strong></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function pushNotification(text) {
+      notifications.unshift(text);
+      const badge = document.getElementById('notifBadge');
+      badge.textContent = String(notifications.length);
+      badge.style.display = 'inline-flex';
+      renderNotifications();
+    }
+
+    function renderNotifications() {
+      document.getElementById('notifList').innerHTML = notifications.map(n => `<div class="list-item">${n}</div>`).join('');
+    }
+
+    function toggleNotifModal() {
+      const m = document.getElementById('notifModal');
+      m.classList.toggle('open');
+      if (m.classList.contains('open')) {
+        document.getElementById('notifBadge').style.display = 'none';
+      }
+    }
+
+    function handleAvatarUpload(ev) {
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        document.getElementById('avatarPreview').src = e.target.result;
+        showToast('Foto profilo aggiornata');
+      };
+      reader.readAsDataURL(f);
+    }
+
+    function openTab(name) {
+      ['esplora', 'pianifica', 'profilo', 'garmin'].forEach(t => {
+        document.getElementById('tab-' + t).classList.toggle('hidden-tab', t !== name);
+        document.getElementById('tabBtn-' + t).classList.toggle('active', t === name);
+      });
+      setTimeout(() => map.invalidateSize(), 100);
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.display = 'block';
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => { t.style.display = 'none'; }, 2600);
+    }
+
+    window.addEventListener('DOMContentLoaded', initMap);
+  </script>
+</body>
+</html>
