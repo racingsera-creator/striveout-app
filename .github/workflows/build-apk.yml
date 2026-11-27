@@ -1,1 +1,59 @@
+name: Build StriveOut Android APK
 
+on:
+  push:
+    branches: [ main, master, principale ]
+  pull_request:
+    branches: [ main, master, principale ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build Debug & Release APKs with Gradle
+        working-directory: android
+        run: |
+          gradle assembleDebug assembleRelease --no-daemon --stacktrace
+
+      - name: Sign Release APK with Android SDK apksigner
+        run: |
+          BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
+          keytool -genkeypair -v -keystore striveout-release.keystore \
+            -alias striveout -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass striveout2026 -keypass striveout2026 \
+            -dname "CN=StriveOut, OU=OutdoorEdge, O=StriveOut, L=Treviso, ST=Veneto, C=IT"
+          "$BUILD_TOOLS/zipalign" -v -p 4 \
+            android/app/build/outputs/apk/release/app-release-unsigned.apk \
+            StriveOut-v1.0.3-aligned.apk
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks striveout-release.keystore \
+            --ks-key-alias striveout \
+            --ks-pass pass:striveout2026 \
+            --key-pass pass:striveout2026 \
+            --out StriveOut-v1.0.3-signed.apk \
+            StriveOut-v1.0.3-aligned.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose StriveOut-v1.0.3-signed.apk
+
+      - name: Upload Installable StriveOut APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: StriveOut-v1.0.3-APK
+          path: |
+            StriveOut-v1.0.3-signed.apk
+            android/app/build/outputs/apk/debug/app-debug.apk
